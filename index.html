@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>EvacRoute — Smart Evacuation System</title>
+ <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+ <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+ <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+ <!-- Leaflet CSS -->
+ <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+ <script>
+ tailwind.config = {
+ darkMode: "class",
+ theme: {
+ extend: {
+ colors: {
+ "tertiary-fixed-dim": "#ffb4ac",
+ "surface-container-high": "#282a2e",
+ "on-background": "#e2e2e8",
+ "background": "#111318",
+ "on-secondary-fixed": "#002105",
+ "primary-container": "#58a6ff",
+ "on-error-container": "#ffdad6",
+ "surface-container": "#1e2024",
+ "tertiary": "#ffb4ac",
+ "on-secondary-container": "#00320a",
+ "on-tertiary-fixed": "#410002",
+ "error": "#ffb4ab",
+ "on-tertiary-fixed-variant": "#93000d",
+ "surface-dim": "#111318",
+ "primary-fixed": "#d3e4ff",
+ "surface-container-lowest": "#0c0e12",
+ "surface-bright": "#37393e",
+ "secondary": "#67df70",
+ "on-primary": "#00315c",
+ "on-primary-fixed-variant": "#004882",
+ "on-surface": "#e2e2e8",
+ "inverse-on-surface": "#2f3035",
+ "primary": "#a2c9ff",
+ "surface-tint": "#a2c9ff",
+ "on-tertiary-container": "#790009",
+ "on-primary-fixed": "#001c38",
+ "surface-container-low": "#1a1c20",
+ "on-surface-variant": "#c0c7d4",
+ "secondary-fixed-dim": "#67df70",
+ "outline-variant": "#414752",
+ "surface-variant": "#333539",
+ "on-primary-container": "#003a6b",
+ "secondary-fixed": "#83fc89",
+ "inverse-surface": "#e2e2e8",
+ "inverse-primary": "#0060aa",
+ "on-error": "#690005",
+ "outline": "#8b919d",
+ "tertiary-fixed": "#ffdad6",
+ "tertiary-container": "#ff7b70",
+ "primary-fixed-dim": "#a2c9ff",
+ "error-container": "#93000a",
+ "secondary-container": "#27a640",
+ "on-tertiary": "#690007",
+ "surface": "#111318",
+ "on-secondary": "#00390d",
+ "on-secondary-fixed-variant": "#005317",
+ "surface-container-highest": "#333539"
+ },
+ fontFamily: {
+ "headline": ["Inter"],
+ "body": ["Inter"],
+ "label": ["Inter"]
+ },
+ borderRadius: {
+ "DEFAULT": "0.125rem",
+ "lg": "0.25rem",
+ "xl": "0.5rem",
+ "full": "0.75rem"
+ },
+ },
+ },
+ }
+ </script>
+ <style>
+ body { font-family: 'Inter', sans-serif; background-color: #111318; color: #e2e2e8; overflow: hidden; }
+ .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+ .glass { backdrop-filter: blur(12px); }
+ .pulse-red { animation: pulse-red 2s infinite; }
+ @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(255, 123, 112, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(255, 123, 112, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 123, 112, 0); } }
+ .pulse-primary { animation: pulse-primary 2s infinite; }
+ @keyframes pulse-primary { 0% { box-shadow: 0 0 0 0 rgba(162, 201, 255, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(162, 201, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(162, 201, 255, 0); } }
+ @keyframes pulse-amber { 0%, 100% { box-shadow: 0 0 10px rgba(249, 189, 34, 0.6); } 50% { box-shadow: 0 0 25px rgba(249, 189, 34, 0.8); } }
+ ::-webkit-scrollbar { width: 4px; }
+ ::-webkit-scrollbar-track { background: transparent; }
+ ::-webkit-scrollbar-thumb { background: #333539; border-radius: 10px; }
+ .leaflet-container { background: #0c0e12 !important; }
+ .leaflet-bar a { background: #1c1f29 !important; color: #f9bd22 !important; border: 1px solid #31353f !important; }
+ .leaflet-bar a:hover { background: #262a34 !important; }
+ .leaflet-popup-content-wrapper { background: #1c1f29 !important; color: #dfe2ef !important; border-radius: 12px !important; }
+ .leaflet-popup-tip { background: #1c1f29 !important; }
+ #map { height: 100%; width: 100%; background: #0c0e12; }
+ .status-blink { animation: status-blink 1.5s ease-in-out infinite; }
+ @keyframes status-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+ .slide-in { animation: slide-in 0.3s ease-out; }
+ @keyframes slide-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+ @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+ .marker-pulse { animation: marker-pulse 1.5s ease-in-out infinite; }
+ @keyframes marker-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+ </style>
+</head>
+<body class="h-screen flex flex-col antialiased">
+ <!-- TopAppBar -->
+ <header class="bg-[#111318]/60 backdrop-blur-xl top-0 z-50 bg-[#1e2024] shadow-[0_0_40px_rgba(88,166,255,0.08)] flex justify-between items-center w-full px-6 py-3 shrink-0">
+ <div class="flex items-center gap-6">
+ <h1 class="text-xl font-bold tracking-tighter text-[#e2e2e8] font-['Inter'] antialiased tracking-tight">EvacRoute</h1>
+ <div id="system-status" class="flex items-center gap-2 px-3 py-1 rounded bg-secondary-container/10 border border-secondary/20">
+ <span class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_#67df70]"></span>
+ <span class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-secondary">Monitoring</span>
+ </div>
+ <div id="current-time" class="hidden lg:block text-[0.75rem] text-on-surface-variant font-mono"></div>
+ </div>
+ <nav class="hidden md:flex items-center gap-8">
+ <a class="text-[#a2c9ff] border-b-2 border-[#a2c9ff] pb-1 text-[0.6875rem] font-bold tracking-[0.05rem] uppercase" href="#">Active Hazards</a>
+ <a class="text-[#909094] hover:bg-[#333539] transition-colors duration-200 text-[0.6875rem] font-bold tracking-[0.05rem] uppercase" href="#">Safe Zones</a>
+ <a class="text-[#909094] hover:bg-[#333539] transition-colors duration-200 text-[0.6875rem] font-bold tracking-[0.05rem] uppercase" href="#">Blocked Roads</a>
+ </nav>
+ <div class="flex items-center gap-4">
+ <button id="simulate-emergency-btn" class="bg-tertiary-container text-on-tertiary-container px-4 py-1.5 rounded-sm text-[0.75rem] font-bold uppercase tracking-wider active:scale-95 transition-transform hover:bg-red-600">
+ TRIGGER EMERGENCY
+ </button>
+ </div>
+ </header>
+
+ <main class="flex-1 flex overflow-hidden">
+ <!-- SideNavBar / Left Panel -->
+ <aside class="h-full left-0 w-80 bg-[#0c0e12] flex flex-col border-r border-[#333539]/20 shrink-0">
+ <div class="p-4 border-b border-outline-variant/10">
+ <div class="flex items-center gap-3 mb-1">
+ <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">analytics</span>
+ <h2 class="font-['Inter'] uppercase tracking-[0.05rem] text-[0.6875rem] text-[#a2c9ff] font-bold">Tactical Intel</h2>
+ </div>
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-widest opacity-60">Sentinel Eye Active</p>
+ </div>
+ <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
+ <!-- Active Hazards -->
+ <section>
+ <div class="flex justify-between items-center mb-4">
+ <h3 class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-on-surface-variant">Active Hazards</h3>
+ <span id="hazard-count" class="text-[0.6875rem] text-tertiary font-bold">0 ALERTS</span>
+ </div>
+ <div id="hazards-list" class="space-y-3">
+ <!-- Hazards will be loaded here -->
+ <div class="text-[0.75rem] text-on-surface-variant italic">No active hazards</div>
+ </div>
+ </section>
+
+ <!-- Safe Zones -->
+ <section>
+ <h3 class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-on-surface-variant mb-4">Safe Zones</h3>
+ <div id="safezones-list" class="space-y-3">
+ <!-- Safe zones will be loaded here -->
+ </div>
+ </section>
+ </div>
+ <div class="p-4 border-t border-outline-variant/10">
+ <button id="report-hazard-btn" class="w-full bg-primary/10 text-primary border border-primary/20 py-2.5 rounded-sm text-[0.6875rem] font-bold uppercase tracking-[0.05rem] hover:bg-primary hover:text-on-primary transition-all duration-300 flex items-center justify-center gap-2">
+ <span class="material-symbols-outlined text-[1.2rem]">add_circle</span>
+ REPORT HAZARD
+ </button>
+ </div>
+ </aside>
+
+ <!-- Center Map Section -->
+ <section class="flex-1 relative bg-surface-dim overflow-hidden">
+ <div id="map" style="height: 100%; width: 100%;"></div>
+ 
+ <!-- Floating Legend -->
+ <div class="absolute bottom-8 left-8 p-4 bg-surface-container-low/80 glass rounded border border-outline-variant/10 shadow-2xl max-w-xs z-[1000]">
+ <h4 class="text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-3">Tactical Legend</h4>
+ <div class="grid grid-cols-2 gap-3">
+ <div class="flex items-center gap-2 text-[0.65rem] uppercase tracking-tight text-on-surface">
+ <span class="w-2.5 h-2.5 rounded-full bg-tertiary"></span> Hazard
+ </div>
+ <div class="flex items-center gap-2 text-[0.65rem] uppercase tracking-tight text-on-surface">
+ <span class="w-2.5 h-2.5 rounded bg-secondary"></span> Safe Zone
+ </div>
+ <div class="flex items-center gap-2 text-[0.65rem] uppercase tracking-tight text-on-surface">
+ <span class="w-5 h-0.5 bg-primary/60"></span> Route
+ </div>
+ <div class="flex items-center gap-2 text-[0.65rem] uppercase tracking-tight text-on-surface">
+ <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Crowd
+ </div>
+ </div>
+ </div>
+ </section>
+
+ <!-- Right Panel / Stats & Notifications -->
+ <aside class="w-80 bg-[#0c0e12] flex flex-col border-l border-[#333539]/20 shrink-0 overflow-y-auto">
+ <!-- Recommended Routes -->
+ <section class="p-4 border-b border-outline-variant/10">
+ <h3 class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-on-surface-variant mb-4">Recommended Routes</h3>
+ <div id="routes-list" class="space-y-3">
+ <!-- Routes will be loaded here -->
+ </div>
+ </section>
+
+ <!-- Live Stats -->
+ <section class="p-4 border-b border-outline-variant/10 bg-surface-container-lowest/50">
+ <h3 class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-on-surface-variant mb-4">Live Crowd Stats</h3>
+ <div id="stats-panel" class="grid grid-cols-2 gap-2">
+ <div class="bg-surface-container p-3 rounded text-center">
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter mb-1">Total Evacuees</p>
+ <p id="stat-evacuees" class="text-xl font-bold text-primary">--</p>
+ </div>
+ <div class="bg-surface-container p-3 rounded text-center">
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter mb-1">Avg. Time</p>
+ <p id="stat-avgtime" class="text-xl font-bold text-primary">--</p>
+ </div>
+ <div class="bg-surface-container p-3 rounded text-center border-b-2 border-tertiary">
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter mb-1">Blocked</p>
+ <p id="stat-blocked" class="text-xl font-bold text-tertiary">--</p>
+ </div>
+ <div class="bg-surface-container p-3 rounded text-center">
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter mb-1">Full Zones</p>
+ <p id="stat-fullzones" class="text-xl font-bold text-on-surface">--</p>
+ </div>
+ </div>
+ </section>
+
+ <!-- Recent Notifications -->
+ <section class="flex-1 p-4 overflow-y-auto">
+ <div class="flex justify-between items-center mb-4">
+ <h3 class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-on-surface-variant">Activity Log</h3>
+ <button id="send-notification-btn" class="text-[0.6rem] text-primary font-bold uppercase hover:underline">+ Broadcast</button>
+ </div>
+ <div id="notifications-list" class="space-y-4">
+ <!-- Notifications will be loaded here -->
+ </div>
+ </section>
+ </aside>
+ </main>
+
+ <!-- Bottom Ticker -->
+ <footer class="h-8 bg-tertiary-container/10 border-t border-tertiary/20 flex items-center overflow-hidden shrink-0">
+ <div class="bg-tertiary-container px-4 h-full flex items-center text-on-tertiary-container text-[0.65rem] font-bold uppercase tracking-widest z-10 shrink-0">
+ EMERGENCY FEED
+ </div>
+ <div class="flex-1 overflow-hidden whitespace-nowrap flex items-center relative">
+ <div id="ticker-content" class="flex animate-[marquee_30s_linear_infinite] gap-12 text-[0.7rem] font-bold text-tertiary uppercase tracking-wider">
+ <span>// System monitoring active</span>
+ </div>
+ </div>
+ </footer>
+
+ <!-- Modal: Report Hazard -->
+ <div id="modal-hazard" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-background/80 glass p-6">
+ <div class="w-full max-w-md bg-surface-container-high rounded-xl border border-outline-variant/20 shadow-2xl p-6">
+ <div class="flex justify-between items-center mb-6">
+ <h2 class="text-xl font-bold uppercase tracking-tighter">Report New Hazard</h2>
+ <button id="close-hazard-modal" class="text-on-surface-variant hover:text-on-surface transition-colors">
+ <span class="material-symbols-outlined">close</span>
+ </button>
+ </div>
+ <form id="hazard-form" class="space-y-4">
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Hazard Type</label>
+ <select id="hazard-type" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2">
+ <option value="fire">Fire</option>
+ <option value="flood">Flood</option>
+ <option value="chemical">Chemical Spill</option>
+ <option value="structural">Structural Collapse</option>
+ <option value="blocked">Blocked Roadway</option>
+ </select>
+ </div>
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Location</label>
+ <input id="hazard-location" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2" placeholder="e.g. 5th & Pine Intersection" type="text"/>
+ </div>
+ <div class="grid grid-cols-2 gap-4">
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Latitude</label>
+ <input id="hazard-lat" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2" placeholder="40.7128" type="number" step="0.0001"/>
+ </div>
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Longitude</label>
+ <input id="hazard-lng" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2" placeholder="-74.006" type="number" step="0.0001"/>
+ </div>
+ </div>
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Severity</label>
+ <select id="hazard-severity" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2">
+ <option value="critical">Critical</option>
+ <option value="high">High</option>
+ <option value="medium">Medium</option>
+ <option value="low">Low</option>
+ </select>
+ </div>
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Description</label>
+ <textarea id="hazard-description" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2" rows="2" placeholder="Additional details..."></textarea>
+ </div>
+ <button type="submit" class="w-full mt-4 bg-primary text-on-primary font-bold py-3 rounded-sm uppercase tracking-[0.1rem] hover:opacity-90 transition-opacity">
+ Confirm Intel
+ </button>
+ </form>
+ </div>
+ </div>
+
+ <!-- Modal: Send Notification -->
+ <div id="modal-notification" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-background/80 glass p-6">
+ <div class="w-full max-w-md bg-surface-container-high rounded-xl border border-outline-variant/20 shadow-2xl p-6">
+ <div class="flex justify-between items-center mb-6">
+ <h2 class="text-xl font-bold uppercase tracking-tighter">Send Broadcast</h2>
+ <button id="close-notification-modal" class="text-on-surface-variant hover:text-on-surface transition-colors">
+ <span class="material-symbols-outlined">close</span>
+ </button>
+ </div>
+ <form id="notification-form" class="space-y-4">
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Type</label>
+ <select id="notification-type" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2">
+ <option value="broadcast">Broadcast</option>
+ <option value="warning">Warning</option>
+ <option value="info">Information</option>
+ <option value="emergency">Emergency</option>
+ </select>
+ </div>
+ <div>
+ <label class="block text-[0.65rem] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5">Message</label>
+ <textarea id="notification-message" class="w-full bg-surface-container text-sm border-outline-variant/30 rounded focus:border-primary focus:ring-0 p-2" rows="3" placeholder="Enter broadcast message..." required></textarea>
+ </div>
+ <button type="submit" class="w-full mt-4 bg-primary text-on-primary font-bold py-3 rounded-sm uppercase tracking-[0.1rem] hover:opacity-90 transition-opacity">
+ Send Broadcast
+ </button>
+ </form>
+ </div>
+ </div>
+
+ <!-- Leaflet JS -->
+ <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+ <script>
+ // ========== CONFIGURATION ==========
+ const API_BASE = 'http://localhost:3000/api';
+ const POLL_INTERVAL = 5000; // 5 seconds
+
+ // ========== STATE ==========
+ let state = {
+ hazards: [],
+ routes: [],
+ safeZones: [],
+ notifications: [],
+ stats: {},
+ crowdDensity: []
+ };
+
+ // ========== MAP SETUP ==========
+ let map, hazardLayer, routeLayer, safeZoneLayer, crowdLayer;
+
+ function initMap() {
+ map = L.map('map', {
+ zoomControl: true,
+ attributionControl: false
+ }).setView([40.7128, -74.006], 13);
+
+ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+ maxZoom: 19
+ }).addTo(map);
+
+ hazardLayer = L.layerGroup().addTo(map);
+ routeLayer = L.layerGroup().addTo(map);
+ safeZoneLayer = L.layerGroup().addTo(map);
+ crowdLayer = L.layerGroup().addTo(map);
+ }
+
+ // ========== API FUNCTIONS ==========
+ async function fetchData(endpoint) {
+ try {
+ const response = await fetch(`${API_BASE}${endpoint}`);
+ if (!response.ok) throw new Error(`HTTP ${response.status}`);
+ return await response.json();
+ } catch (error) {
+ console.error(`Error fetching ${endpoint}:`, error);
+ return null;
+ }
+ }
+
+ async function postData(endpoint, data) {
+ try {
+ const response = await fetch(`${API_BASE}${endpoint}`, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(data)
+ });
+ if (!response.ok) throw new Error(`HTTP ${response.status}`);
+ return await response.json();
+ } catch (error) {
+ console.error(`Error posting to ${endpoint}:`, error);
+ return null;
+ }
+ }
+
+ async function deleteData(endpoint) {
+ try {
+ const response = await fetch(`${API_BASE}${endpoint}`, {
+ method: 'DELETE'
+ });
+ if (!response.ok) throw new Error(`HTTP ${response.status}`);
+ return await response.json();
+ } catch (error) {
+ console.error(`Error deleting from ${endpoint}:`, error);
+ return null;
+ }
+ }
+
+ async function patchData(endpoint, data) {
+ try {
+ const response = await fetch(`${API_BASE}${endpoint}`, {
+ method: 'PATCH',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(data)
+ });
+ if (!response.ok) throw new Error(`HTTP ${response.status}`);
+ return await response.json();
+ } catch (error) {
+ console.error(`Error patching ${endpoint}:`, error);
+ return null;
+ }
+ }
+
+ // ========== RENDER FUNCTIONS ==========
+ function renderHazards() {
+ const container = document.getElementById('hazards-list');
+ if (!container) return;
+
+ hazardLayer.clearLayers();
+
+ if (state.hazards.length === 0) {
+ container.innerHTML = '<div class="text-[0.75rem] text-on-surface-variant italic">No active hazards</div>';
+ document.getElementById('hazard-count').textContent = '0 ALERTS';
+ return;
+ }
+
+ document.getElementById('hazard-count').textContent = `${state.hazards.length} ALERTS`;
+
+ let html = '';
+ state.hazards.forEach(hazard => {
+ const severityColors = {
+ critical: 'border-tertiary bg-error-container',
+ high: 'border-orange-500 bg-orange-500/20',
+ medium: 'border-amber-500 bg-amber-500/20',
+ low: 'border-blue-500 bg-blue-500/20'
+ };
+ const severityColor = severityColors[hazard.severity] || severityColors.high;
+
+ const typeIcons = {
+ fire: '🔥',
+ flood: '🌊',
+ chemical: '☢️',
+ structural: '🏗️',
+ blocked: '🚧'
+ };
+ const icon = typeIcons[hazard.type] || '⚠️';
+
+ html += `
+ <div class="bg-surface-container-low p-3 rounded border-l-2 ${severityColor.split(' ')[0]} relative group hover:bg-surface-container transition-colors slide-in">
+ <div class="flex justify-between items-start mb-2">
+ <span class="text-[0.6rem] px-2 py-0.5 rounded-sm font-bold uppercase ${severityColor}">${hazard.severity}</span>
+ <span class="text-[0.6rem] text-on-surface-variant">${new Date(hazard.createdAt).toLocaleTimeString()}</span>
+ </div>
+ <h4 class="text-sm font-semibold mb-1">${icon} ${hazard.type.charAt(0).toUpperCase() + hazard.type.slice(1)}</h4>
+ <div class="flex items-center gap-1.5 text-[0.7rem] text-on-surface-variant mb-3">
+ <span class="material-symbols-outlined text-[1rem]">location_on</span>
+ ${hazard.location}
+ </div>
+ <button onclick="resolveHazard('${hazard.id}')" class="w-full py-1.5 border border-outline-variant/30 text-[0.6rem] font-bold uppercase tracking-tighter hover:bg-surface-container-highest transition-colors">
+ Resolve
+ </button>
+ </div>
+ `;
+
+ // Add marker to map
+ const marker = L.circleMarker([hazard.lat, hazard.lng], {
+ radius: 15,
+ fillColor: '#ef4444',
+ color: '#ff7b70',
+ weight: 2,
+ opacity: 1,
+ fillOpacity: 0.6,
+ className: 'marker-pulse'
+ }).addTo(hazardLayer);
+
+ marker.bindPopup(`
+ <div style="padding: 8px;">
+ <strong style="color: #ef4444;">${icon} ${hazard.type.toUpperCase()}</strong><br>
+ <span style="font-size: 12px;">${hazard.location}</span><br>
+ <span style="font-size: 11px; color: #c2c6d6;">Severity: ${hazard.severity}</span>
+ </div>
+ `);
+
+ // Add danger zone circle
+ L.circle([hazard.lat, hazard.lng], {
+ radius: 300,
+ fillColor: '#ef4444',
+ color: '#ff7b70',
+ weight: 1,
+ opacity: 0.3,
+ fillOpacity: 0.1
+ }).addTo(hazardLayer);
+ });
+
+ container.innerHTML = html;
+ }
+
+ function renderRoutes() {
+ const container = document.getElementById('routes-list');
+ if (!container) return;
+
+ routeLayer.clearLayers();
+
+ if (state.routes.length === 0) {
+ container.innerHTML = '<div class="text-[0.75rem] text-on-surface-variant italic">No routes available</div>';
+ return;
+ }
+
+ let html = '';
+ state.routes.forEach((route, idx) => {
+ const isBlocked = route.blocked;
+ const borderColor = isBlocked ? 'border-tertiary' : route.recommended ? 'border-secondary' : 'border-outline-variant';
+ const safetyClass = route.safetyScore >= 70 ? 'text-secondary' : route.safetyScore >= 40 ? 'text-amber-500' : 'text-tertiary';
+
+ html += `
+ <div class="bg-surface-container-low p-3 rounded border border-outline-variant/10 hover:border-primary/40 transition-all cursor-pointer ${isBlocked ? 'opacity-50' : ''}" data-route-id="${route.id}">
+ <div class="flex justify-between items-start mb-2">
+ <h4 class="text-sm font-semibold">${route.name}</h4>
+ <span class="${safetyClass} text-[0.7rem] font-bold bg-surface-container-highest px-1.5 py-0.5 rounded">
+ ${isBlocked ? 'BLOCKED' : route.safetyScore + ' Safety'}
+ </span>
+ </div>
+ <div class="flex gap-4 mb-3">
+ <div class="text-center">
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter">Time</p>
+ <p class="text-xs font-bold text-primary">${route.time}m</p>
+ </div>
+ <div class="text-center">
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter">Traffic</p>
+ <p class="text-xs font-bold ${route.congestion === 'low' ? 'text-secondary' : route.congestion === 'medium' ? 'text-amber-500' : 'text-tertiary'}">${route.congestion}</p>
+ </div>
+ <div class="text-center">
+ <p class="text-[0.6rem] text-on-surface-variant uppercase tracking-tighter">Dist</p>
+ <p class="text-xs font-bold text-on-surface">${route.distance}km</p>
+ </div>
+ </div>
+ <button onclick="navigateRoute('${route.id}')" class="w-full py-1.5 bg-primary/10 text-primary text-[0.65rem] font-bold uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-all" ${isBlocked ? 'disabled' : ''}>
+ ${isBlocked ? 'Route Blocked' : 'Navigate'}
+ </button>
+ </div>
+ `;
+
+ // Draw route on map if not blocked
+ if (!isBlocked && route.waypoints && route.waypoints.length > 0) {
+ const coords = route.waypoints.map(wp => [wp.lat, wp.lng]);
+ const color = route.recommended ? '#22c55e' : '#f59e0b';
+ 
+ L.polyline(coords, {
+ color: color,
+ weight: route.recommended ? 5 : 3,
+ opacity: route.recommended ? 1 : 0.6,
+ dashArray: route.recommended ? null : '10, 10'
+ }).addTo(routeLayer);
+ }
+ });
+
+ container.innerHTML = html;
+ }
+
+ function renderSafeZones() {
+ const container = document.getElementById('safezones-list');
+ if (!container) return;
+
+ safeZoneLayer.clearLayers();
+
+ if (state.safeZones.length === 0) {
+ container.innerHTML = '<div class="text-[0.75rem] text-on-surface-variant italic">No safe zones available</div>';
+ return;
+ }
+
+ let html = '';
+ state.safeZones.forEach(zone => {
+ const pct = Math.min(100, Math.round((zone.occupied / zone.capacity) * 100));
+ const color = pct < 70 ? 'border-secondary' : pct < 90 ? 'border-amber-500' : 'border-tertiary';
+ const progressColor = pct < 70 ? 'bg-secondary' : pct < 90 ? 'bg-amber-500' : 'bg-tertiary';
+
+ html += `
+ <div class="bg-surface-container-low p-3 rounded border-l-2 ${color} relative">
+ <div class="flex justify-between items-center mb-2">
+ <h4 class="text-sm font-semibold">${zone.name}</h4>
+ <span class="text-[0.65rem] text-secondary font-bold uppercase">${zone.status}</span>
+ </div>
+ <div class="w-full bg-surface-container-highest h-1 rounded-full mb-2 overflow-hidden">
+ <div class="${progressColor} h-full shadow-[0_0_8px_rgba(103,223,112,0.5)]" style="width: ${pct}%"></div>
+ </div>
+ <div class="flex justify-between text-[0.6rem] text-on-surface-variant uppercase font-bold tracking-tighter mb-2">
+ <span>${zone.occupied} / ${zone.capacity} Capacity</span>
+ <span>${zone.distance} KM</span>
+ </div>
+ <div class="flex gap-2">
+ <button onclick="updateZoneOccupancy('${zone.id}', -10)" class="flex-1 py-1 text-[0.6rem] font-bold uppercase bg-surface-container-highest rounded hover:bg-error-container/20 transition-colors">-10</button>
+ <button onclick="updateZoneOccupancy('${zone.id}', 10)" class="flex-1 py-1 text-[0.6rem] font-bold uppercase bg-surface-container-highest rounded hover:bg-secondary/20 transition-colors">+10</button>
+ </div>
+ </div>
+ `;
+
+ // Add marker to map
+ const markerColor = pct < 70 ? '#22c55e' : pct < 90 ? '#f59e0b' : '#ef4444';
+ const marker = L.circleMarker([zone.lat, zone.lng], {
+ radius: 12,
+ fillColor: markerColor,
+ color: '#ffffff',
+ weight: 2,
+ opacity: 1,
+ fillOpacity: 0.8
+ }).addTo(safeZoneLayer);
+
+ marker.bindPopup(`
+ <div style="padding: 8px;">
+ <strong style="color: #3b82f6;">🏠 ${zone.name}</strong><br>
+ <span style="font-size: 12px;">${zone.location}</span><br>
+ <span style="font-size: 11px; color: ${markerColor};">Capacity: ${zone.occupied}/${zone.capacity} (${pct}%)</span>
+ </div>
+ `);
+ });
+
+ container.innerHTML = html;
+ }
+
+ function renderNotifications() {
+ const container = document.getElementById('notifications-list');
+ if (!container) return;
+
+ if (state.notifications.length === 0) {
+ container.innerHTML = '<div class="text-[0.75rem] text-on-surface-variant italic">No notifications</div>';
+ return;
+ }
+
+ let html = '';
+ state.notifications.slice(0, 20).forEach(notif => {
+ const typeColors = {
+ hazard: 'border-tertiary',
+ warning: 'border-amber-500',
+ success: 'border-secondary',
+ info: 'border-primary',
+ broadcast: 'border-blue-500',
+ emergency: 'border-red-500'
+ };
+ const typeIcons = {
+ hazard: 'warning',
+ warning: 'alert',
+ success: 'task_alt',
+ info: 'info',
+ broadcast: 'campaign',
+ emergency: 'notification_important'
+ };
+ const color = typeColors[notif.type] || 'border-outline-variant';
+ const icon = typeIcons[notif.type] || 'info';
+
+ html += `
+ <div class="flex gap-3 items-start border-l-2 ${color} pl-3 slide-in">
+ <span class="material-symbols-outlined text-${notif.type === 'emergency' || notif.type === 'hazard' ? 'tertiary' : notif.type === 'success' ? 'secondary' : 'primary'} text-base">${icon}</span>
+ <div>
+ <p class="text-[0.7rem] text-on-surface font-medium leading-tight">${notif.message}</p>
+ <p class="text-[0.6rem] text-on-surface-variant mt-1">${formatTime(notif.timestamp)}</p>
+ </div>
+ </div>
+ `;
+ });
+
+ container.innerHTML = html;
+ }
+
+ function renderStats() {
+ if (!state.stats) return;
+
+ document.getElementById('stat-evacuees').textContent = state.stats.totalEvacuees?.toLocaleString() || '--';
+ document.getElementById('stat-avgtime').textContent = state.stats.avgEvacuationTime ? `${state.stats.avgEvacuationTime.toFixed(1)}m` : '--';
+ document.getElementById('stat-blocked').textContent = state.stats.blockedRoadsCount ?? '--';
+ document.getElementById('stat-fullzones').textContent = state.stats.fullZonesCount ?? '--';
+
+ // Update system status
+ const statusEl = document.getElementById('system-status');
+ const activeHazards = state.hazards.length;
+ if (activeHazards > 0) {
+ statusEl.innerHTML = `
+ <span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_#ff7b70] status-blink"></span>
+ <span class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-tertiary">${activeHazards} Active Hazards</span>
+ `;
+ } else {
+ statusEl.innerHTML = `
+ <span class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_#67df70]"></span>
+ <span class="text-[0.6875rem] font-bold tracking-[0.05rem] uppercase text-secondary">Monitoring</span>
+ `;
+ }
+
+ // Update ticker
+ const tickerEl = document.getElementById('ticker-content');
+ let tickerItems = ['// System monitoring active'];
+ if (activeHazards > 0) {
+ tickerItems = state.hazards.map(h => `// ${h.type.toUpperCase()} at ${h.location}`);
+ tickerItems.push(`// ${state.stats.blockedRoadsCount || 0} roads blocked`);
+ tickerItems.push(`// ${state.routes.filter(r => !r.blocked).length} safe routes available`);
+ }
+ tickerEl.innerHTML = tickerItems.map(t => `<span>${t}</span>`).join('');
+ }
+
+ function renderCrowdDensity() {
+ crowdLayer.clearLayers();
+ if (!state.crowdDensity || state.crowdDensity.length === 0) return;
+
+ state.crowdDensity.forEach(point => {
+ const color = point.intensity > 0.7 ? '#ef4444' : point.intensity > 0.4 ? '#f59e0b' : '#22c55e';
+ L.circleMarker([point.lat, point.lng], {
+ radius: 8 + point.intensity * 10,
+ fillColor: color,
+ color: 'transparent',
+ weight: 0,
+ opacity: 0,
+ fillOpacity: point.intensity * 0.3
+ }).addTo(crowdLayer);
+ });
+ }
+
+ function renderAll() {
+ renderHazards();
+ renderRoutes();
+ renderSafeZones();
+ renderNotifications();
+ renderStats();
+ renderCrowdDensity();
+ }
+
+ // ========== ACTION FUNCTIONS ==========
+ async function loadAllData() {
+ const [hazards, routes, safeZones, notifications, stats, crowdDensity] = await Promise.all([
+ fetchData('/hazards'),
+ fetchData('/routes'),
+ fetchData('/safezones'),
+ fetchData('/notifications'),
+ fetchData('/stats'),
+ fetchData('/crowddensity')
+ ]);
+
+ if (hazards) state.hazards = hazards;
+ if (routes) state.routes = routes;
+ if (safeZones) state.safeZones = safeZones;
+ if (notifications) state.notifications = notifications;
+ if (stats) state.stats = stats;
+ if (crowdDensity) state.crowdDensity = crowdDensity;
+
+ renderAll();
+ }
+
+ async function resolveHazard(id) {
+ const result = await deleteData(`/hazards/${id}`);
+ if (result) {
+ console.log('Hazard resolved:', result);
+ await loadAllData();
+ }
+ }
+
+ async function updateZoneOccupancy(id, change) {
+ const result = await patchData(`/safezones/${id}`, { occupancyChange: change });
+ if (result) {
+ console.log('Zone updated:', result);
+ await loadAllData();
+ }
+ }
+
+ async function navigateRoute(id) {
+ const route = state.routes.find(r => r.id === id);
+ if (!route || route.blocked) return;
+
+ // Highlight route on map
+ if (route.waypoints && route.waypoints.length > 0) {
+ const coords = route.waypoints.map(wp => [wp.lat, wp.lng]);
+ map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
+ }
+
+ alert(`Navigation started:\n${route.name}\nDestination: ${route.destination}\nEstimated time: ${route.time} minutes\nDistance: ${route.distance} km`);
+ }
+
+ async function reportHazard(formData) {
+ const result = await postData('/hazards', formData);
+ if (result) {
+ console.log('Hazard reported:', result);
+ document.getElementById('modal-hazard').classList.add('hidden');
+ await loadAllData();
+ }
+ }
+
+ async function sendNotification(formData) {
+ const result = await postData('/notifications', formData);
+ if (result) {
+ console.log('Notification sent:', result);
+ document.getElementById('modal-notification').classList.add('hidden');
+ await loadAllData();
+ }
+ }
+
+ async function simulateEmergency() {
+ const btn = document.getElementById('simulate-emergency-btn');
+ btn.textContent = 'TRIGGERING...';
+ btn.disabled = true;
+
+ const result = await postData('/simulate-emergency', {});
+ if (result) {
+ console.log('Emergency simulated:', result);
+ // Wait a bit for the server to process
+ setTimeout(async () => {
+ await loadAllData();
+ btn.textContent = 'TRIGGER EMERGENCY';
+ btn.disabled = false;
+ }, 2000);
+ }
+ }
+
+ // ========== UTILITY FUNCTIONS ==========
+ function formatTime(timestamp) {
+ const date = new Date(timestamp);
+ const now = new Date();
+ const diffMs = now - date;
+ const diffMins = Math.floor(diffMs / 60000);
+ 
+ if (diffMins < 1) return 'Just now';
+ if (diffMins < 60) return `${diffMins} min ago`;
+ return date.toLocaleTimeString();
+ }
+
+ function updateClock() {
+ const now = new Date();
+ const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+ const timeStr = now.toLocaleTimeString();
+ document.getElementById('current-time').textContent = `${dateStr} | ${timeStr}`;
+ }
+
+ // ========== EVENT LISTENERS ==========
+ function setupEventListeners() {
+ // Report Hazard Modal
+ document.getElementById('report-hazard-btn').addEventListener('click', () => {
+ document.getElementById('modal-hazard').classList.remove('hidden');
+ });
+ document.getElementById('close-hazard-modal').addEventListener('click', () => {
+ document.getElementById('modal-hazard').classList.add('hidden');
+ });
+ document.getElementById('hazard-form').addEventListener('submit', (e) => {
+ e.preventDefault();
+ const formData = {
+ type: document.getElementById('hazard-type').value,
+ location: document.getElementById('hazard-location').value,
+ lat: parseFloat(document.getElementById('hazard-lat').value) || 40.7128 + (Math.random() - 0.5) * 0.02,
+ lng: parseFloat(document.getElementById('hazard-lng').value) || -74.006 + (Math.random() - 0.5) * 0.02,
+ severity: document.getElementById('hazard-severity').value,
+ description: document.getElementById('hazard-description').value
+ };
+ reportHazard(formData);
+ });
+
+ // Send Notification Modal
+ document.getElementById('send-notification-btn').addEventListener('click', () => {
+ document.getElementById('modal-notification').classList.remove('hidden');
+ });
+ document.getElementById('close-notification-modal').addEventListener('click', () => {
+ document.getElementById('modal-notification').classList.add('hidden');
+ });
+ document.getElementById('notification-form').addEventListener('submit', (e) => {
+ e.preventDefault();
+ const formData = {
+ type: document.getElementById('notification-type').value,
+ message: document.getElementById('notification-message').value
+ };
+ sendNotification(formData);
+ });
+
+ // Simulate Emergency Button
+ document.getElementById('simulate-emergency-btn').addEventListener('click', simulateEmergency);
+
+ // Close modals on outside click
+ document.getElementById('modal-hazard').addEventListener('click', (e) => {
+ if (e.target.id === 'modal-hazard') e.target.classList.add('hidden');
+ });
+ document.getElementById('modal-notification').addEventListener('click', (e) => {
+ if (e.target.id === 'modal-notification') e.target.classList.add('hidden');
+ });
+ }
+
+ // ========== INITIALIZATION ==========
+ document.addEventListener('DOMContentLoaded', async () => {
+ initMap();
+ setupEventListeners();
+ updateClock();
+ setInterval(updateClock, 1000);
+
+ // Initial load
+ await loadAllData();
+
+ // Start polling
+ setInterval(loadAllData, POLL_INTERVAL);
+
+ console.log('EvacRoute System initialized');
+ });
+ </script>
+</body>
+</html>
