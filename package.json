@@ -1,0 +1,18 @@
+{
+  "name": "evacuation-system",
+  "version": "1.0.0",
+  "description": "Evacuation Route Planning and Crowd Movement System",
+  "scripts": {
+    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "cd client && python -m http.server 3001"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
